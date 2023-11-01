@@ -1,3 +1,20 @@
+<#
+.SYNOPSIS
+	Create a Self Signed certificate, create a CSR and Private key or export a certificate to PFX
+.DESCRIPTION
+	This script has several options to create a Self Signed Certificate, a CSR and private key of export a certificate from a user or computer store to PFX.
+.PARAMETER Help
+	Display the detailed information about this script
+.NOTES
+	File name	:	CertGUI.ps1
+	Version		:	1.0
+	Author		:	Harm Peter Millaard
+	Requires	:	PowerShell v5.1 and up
+				Internet Connection
+.LINK
+	https://github.com/hpmillaard/CertGUI
+#>
+
 If (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {Start powershell "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs; exit}
 
 $KeySize = "4096"
@@ -19,7 +36,6 @@ function New-Label($Label, $X, $Y, $Width, $Height){
 	$LabelControl.Size = New-Object System.Drawing.Size $Width, $Height
 	$LabelControl.Text = $Label
 	$Form.Controls.Add($LabelControl)
-#	return $LabelControl
 }
 function New-TextBox($X, $Y, $Width, $Height){
 	$TextBox = New-Object System.Windows.Forms.TextBox
@@ -157,20 +173,10 @@ OID=1.3.6.1.5.5.7.3.2		#Server Authentication
 	}
 }
 
-$CreateSelfSigned = New-Button "Create Self Signed Certificate" 10 250 200 25
-$CreateSelfSigned.Add_Click({ Generate-Certificate })
-$Form.Controls.Add($CreateSelfSigned)
-
-$GenerateCSR = New-Button "Generate CSR" 200 250 150 25
-$GenerateCSR.Add_Click({ Generate-Certificate -isCSR $true })
-$Form.Controls.Add($GenerateCSR)
-
-$ExportPFX = New-Button "Export PFX" 350 250 100 25
-$ExportPFX.Add_Click({
+function Export-PFX{
 	$StoreLocation = if ($ComputerStore.Checked) {"Cert:\LocalMachine\my"} else {"Cert:\CurrentUser\my"}
 	if ((dir $StoreLocation).count -gt 0){
 		$Certs = dir $StoreLocation | % {[PSCustomObject]@{CommonName = $_.SubjectName.Name.Split(',')[0] -replace '^CN=';ExpirationDate = $_.NotAfter;Thumbprint = $_.Thumbprint}} | Sort CommonName | ogv -Title "Select the certificate you want to export" -PassThru
-
 		if ($Certs) {
 			$OFD = New-Object System.Windows.Forms.SaveFileDialog
 			$OFD.FileName = ($Certs.CommonName -replace '\*','wildcard') + '-' + $Certs.ExpirationDate.tostring("yyyyMMdd") + '.pfx'
@@ -185,7 +191,18 @@ $ExportPFX.Add_Click({
 		dir $StoreLocation\$($Cert.Thumbprint) | Export-PfxCertificate -FilePath $PFXFile -Password $pwd | Out-Null
 		msgbox "Certificate is exported to $PFXFile"
 	} Else {msgbox "No Certificates to export!"}
-})
+}
+
+$CreateSelfSigned = New-Button "Create Self Signed Certificate" 10 250 200 25
+$CreateSelfSigned.Add_Click({Generate-Certificate})
+$Form.Controls.Add($CreateSelfSigned)
+
+$GenerateCSR = New-Button "Generate CSR" 200 250 150 25
+$GenerateCSR.Add_Click({Generate-Certificate -isCSR})
+$Form.Controls.Add($GenerateCSR)
+
+$ExportPFX = New-Button "Export PFX" 350 250 100 25
+$ExportPFX.Add_Click({Export-PFX})
 $Form.Controls.Add($ExportPFX)
 
 $Form.ShowDialog()
