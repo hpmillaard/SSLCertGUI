@@ -3,22 +3,20 @@
 	Create a Self Signed certificate, create a CSR and Private key or export a certificate to PFX
 .DESCRIPTION
 	This script has several options to create a Self Signed Certificate, a CSR and private key of export a certificate from a user or computer store to PFX.
+
+	You can edit this script to change special parameters found in https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certreq_1
 .PARAMETER Help
 	Display the detailed information about this script
 .NOTES
 	File name	:	CertGUI.ps1
-	Version		:	1.0
+	Version		:	1.1
 	Author		:	Harm Peter Millaard
 	Requires	:	PowerShell v5.1 and up
-				Internet Connection
 .LINK
 	https://github.com/hpmillaard/CertGUI
 #>
 
 If (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {Start powershell "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs; exit}
-
-$KeySize = "4096"
-$KeyAlgorithm = "RSA"
 
 # Create GUI
 Add-Type -AN System.Windows.Forms
@@ -27,8 +25,9 @@ Add-Type -AN Microsoft.VisualBasic
 
 $Form = New-Object System.Windows.Forms.Form
 $Form.Text = "Certificate PS GUI"
-$Form.Size = New-Object System.Drawing.Size(480, 320)
+$Form.Size = New-Object System.Drawing.Size(480, 350)
 $Form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+$Form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
 
 function New-Label($Label, $X, $Y, $Width, $Height){
 	$LabelControl = New-Object System.Windows.Forms.Label
@@ -52,14 +51,14 @@ function New-Button($Text, $X, $Y, $Width, $Height){
 	$Form.Controls.Add($Button)
 	return $Button
 }
-function New-RadioButton($Text, $X, $Y, $Width, $Height, $Checked){
-	$RadioButton = New-Object System.Windows.Forms.RadioButton
-	$RadioButton.Location = New-Object System.Drawing.Point $X, $Y
-	$RadioButton.Size = New-Object System.Drawing.Size $Width, $Height
-	$RadioButton.Text = $Text
-	$RadioButton.Checked = $Checked
-	$Form.Controls.Add($RadioButton)
-	return $RadioButton
+function New-ComboBox($X, $Y, $Width, $Height, $Items){
+	$ComboBox = New-Object System.Windows.Forms.ComboBox
+	$ComboBox.Location = New-Object System.Drawing.Point $X, $Y
+	$ComboBox.Size = New-Object System.Drawing.Size $Width, $Height
+	$ComboBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+	$ComboBox.Items.AddRange($Items)
+	$Form.Controls.Add($ComboBox)
+	return $ComboBox
 }
 function msgbox($Text){[System.Windows.Forms.MessageBox]::Show($Text, $Text, [System.Windows.Forms.MessageBoxButtons]::OK)}
 
@@ -87,11 +86,16 @@ $DatePicker.Size = New-Object System.Drawing.Size 250, 20
 $DatePicker.Value = (Get-Date "2030-01-01 00:00:00.000")
 $Form.Controls.Add($DatePicker)
 
-[void](New-RadioButton "User Store" 5 225 200 20 $false)
-[void]($ComputerStore = New-RadioButton "Computer Store" 210 225 200 20 $true)
+New-Label "Store:" 5 225 200 20
+$Store = New-ComboBox 210 225 100 20 @("User", "Computer")
+$Store.SelectedItem = "Computer"
+
+New-Label "Key Size:" 5 250 200 20
+$KeySize = New-ComboBox 210 250 100 20 @("2048", "4096")
+$KeySize.SelectedItem = "4096"
 
 function Generate-Certificate($isCSR = $false){
-	$StoreLocation = if ($ComputerStore.Checked) {"Cert:\LocalMachine\my"} else {"Cert:\CurrentUser\my"}
+	$StoreLocation = if ($Store.SelectedItem -match "Computer") {"Cert:\LocalMachine\my"} else {"Cert:\CurrentUser\my"}
 	$SubjectHT = @()
 	If (![string]::IsNullOrEmpty($CNTextBox.Text)){$SubjectHT += "CN=$($CNTextBox.Text)"}else{msgbox "CN can't be empty";return}
 	If (![string]::IsNullOrEmpty($OTextBox.Text)){$SubjectHT += "O=$($OTextBox.Text)"}
@@ -117,8 +121,8 @@ Signature="`$Windows NT$"
 Subject = "$($Subject)"
 Exportable = True
 ProviderName = "Microsoft Software Key Storage Provider"
-KeyLength = $KeySize
-KeyAlgorithm = $KeyAlgorithm
+KeyLength = $($KeySize.SelectedItem)
+KeyAlgorithm = RSA
 HashAlgorithm = SHA256
 MachineKeySet = True
 SMIME = False
@@ -158,7 +162,7 @@ OID=1.3.6.1.5.5.7.3.2		#Server Authentication
 2.5.29.17 = "{text}"
 "@
 		$infContent = ($infContent -split "`n" | ForEach-Object { $_ -replace '\s*#.*', '' } | Where-Object { $_ -ne '' }) -join "`n"
-		$infContent | sc $F
+		$infContent | Set-Content $F
 
 		$SANs | % {ac $F "_continue_ = ""$($_)&"""}
 
@@ -193,15 +197,15 @@ function Export-PFX{
 	} Else {msgbox "No Certificates to export!"}
 }
 
-$CreateSelfSigned = New-Button "Create Self Signed Certificate" 10 250 200 25
+$CreateSelfSigned = New-Button "Create Self Signed Certificate" 5 280 205 25
 $CreateSelfSigned.Add_Click({Generate-Certificate})
 $Form.Controls.Add($CreateSelfSigned)
 
-$GenerateCSR = New-Button "Generate CSR" 200 250 150 25
-$GenerateCSR.Add_Click({Generate-Certificate -isCSR})
+$GenerateCSR = New-Button "Generate CSR" 215 280 140 25
+$GenerateCSR.Add_Click({Generate-Certificate -isCSR $true})
 $Form.Controls.Add($GenerateCSR)
 
-$ExportPFX = New-Button "Export PFX" 350 250 100 25
+$ExportPFX = New-Button "Export PFX" 360 280 100 25
 $ExportPFX.Add_Click({Export-PFX})
 $Form.Controls.Add($ExportPFX)
 
