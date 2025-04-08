@@ -9,7 +9,7 @@
 	Display the detailed information about this script
 .NOTES
 	File name	:	CertGUI.ps1
-	Version		:	1.1
+	Version		:	1.2
 	Author		:	Harm Peter Millaard
 	Requires	:	PowerShell v5.1 and up
 .LINK
@@ -76,6 +76,7 @@ New-Label "State (S):" 5 125 200 20
 $STextBox = New-TextBox 210 125 250 20
 New-Label "Country (C):" 5 150 200 20
 $CTextBox = New-TextBox 210 150 250 20
+#$CTextBox.Text = "NL"
 New-Label "Subject Alternative Name (SAN) [,]:" 5 175 200 20
 $SANTextBox = New-TextBox 210 175 250 20
 New-Label "Expire Date:" 5 200 200 20
@@ -166,7 +167,7 @@ OID=1.3.6.1.5.5.7.3.2		#Server Authentication
 
 		$SANs | % {ac $F "_continue_ = ""$($_)&"""}
 
-		$CSRName = $CNTextBox.Text -replace '\*','Wildcard'
+		$CSRName = $CNTextBox.Text -replace '\*','wildcard'
 		$CSR = "$PSScriptRoot\$CSRName.csr"
 		certreq.exe -new $F $CSR
 
@@ -178,7 +179,7 @@ OID=1.3.6.1.5.5.7.3.2		#Server Authentication
 }
 
 function Export-PFX{
-	$StoreLocation = if ($ComputerStore.Checked) {"Cert:\LocalMachine\my"} else {"Cert:\CurrentUser\my"}
+	$StoreLocation = if ($Store.SelectedItem -eq "User") {"cert:\CurrentUser\my"} else {"cert:\LocalMachine\my"}
 	if ((dir $StoreLocation).count -gt 0){
 		$Certs = dir $StoreLocation | % {[PSCustomObject]@{CommonName = $_.SubjectName.Name.Split(',')[0] -replace '^CN=';ExpirationDate = $_.NotAfter;Thumbprint = $_.Thumbprint}} | Sort CommonName | ogv -Title "Select the certificate you want to export" -PassThru
 		if ($Certs) {
